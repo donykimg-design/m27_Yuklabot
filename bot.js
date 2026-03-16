@@ -72,8 +72,16 @@ function cleanupDir(dir, delayMs = 300000) {
 function ytDlpDownload(url, outputTemplate, extraArgs = '') {
   const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
   return new Promise((resolve, reject) => {
-    // --no-check-certificate va --user-agent qo'shildi
-    const cmd = `yt-dlp -o "${outputTemplate}" --no-playlist --max-filesize 49m --no-check-certificate --user-agent "${userAgent}" ${extraArgs} "${url}"`;
+    // Agar extraArgs ichida '-x' bo'lsa, demak bu musiqa (audio)
+    const isAudio = extraArgs.includes('-x');
+    
+    // Video va Audio uchun alohida formatlar
+    const formatStr = isAudio 
+      ? '-f "bestaudio/best"' 
+      : '-f "bestvideo[ext=mp4][filesize<45M]+bestaudio[ext=m4a]/best[ext=mp4][filesize<45M]/best"';
+
+    const cmd = `./yt-dlp -o "${outputTemplate}" --no-playlist --max-filesize 49m --no-check-certificate --user-agent "${userAgent}" --ffmpeg-location ./ffmpeg ${formatStr} ${extraArgs} "${url}"`;
+    
     console.log('[yt-dlp] CMD:', cmd);
     exec(cmd, { timeout: 120000 }, (err, stdout, stderr) => {
       if (err) {
@@ -252,11 +260,8 @@ bot.on('message', async (msg) => {
   const outTemplate = path.join(tmpDir, 'media.%(ext)s');
 
   try {
-    // Platform uchun maxsus argumentlar
-    const extraArgs = platform === 'instagram'
-      ? '-f "best[ext=mp4]/bestvideo+bestaudio/best"'
-      : '-f "best[height<=720][ext=mp4]/best[height<=720]/best"';
-
+    // Instagram Storiyalari va Postlar uchun qo'shimcha argumentlar
+    const extraArgs = '--no-warnings --geo-bypass';
     await ytDlpDownload(url, outTemplate, extraArgs);
     const mediaFile = getFirstFile(tmpDir);
 
