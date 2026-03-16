@@ -70,8 +70,10 @@ function cleanupDir(dir, delayMs = 300000) {
 //  ⬇️  VIDEO/RASM YUKLOVCHI (yt-dlp)
 // ============================================================
 function ytDlpDownload(url, outputTemplate, extraArgs = '') {
+  const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
   return new Promise((resolve, reject) => {
-    const cmd = `yt-dlp -o "${outputTemplate}" --no-playlist --max-filesize 49m ${extraArgs} "${url}"`;
+    // --no-check-certificate va --user-agent qo'shildi
+    const cmd = `yt-dlp -o "${outputTemplate}" --no-playlist --max-filesize 49m --no-check-certificate --user-agent "${userAgent}" ${extraArgs} "${url}"`;
     console.log('[yt-dlp] CMD:', cmd);
     exec(cmd, { timeout: 120000 }, (err, stdout, stderr) => {
       if (err) {
