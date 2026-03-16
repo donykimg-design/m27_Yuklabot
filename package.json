@@ -1,0 +1,17 @@
+{
+  "name": "m27-yukla-bot",
+  "version": "1.0.0",
+  "description": "Instagram, YouTube yuklovchi va musiqa tanib oluvchi Telegram bot",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "node-telegram-bot-api": "^0.64.0",
+    "axios": "^1.6.0",
+    "form-data": "^4.0.0",
+    "dotenv": "^16.3.1",
+    "fluent-ffmpeg": "^2.1.2",
+    "express": "^4.18.2"
+  }
+}
