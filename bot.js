@@ -104,7 +104,7 @@ function getFirstFile(dir) {
 // ============================================================
 function searchMusicYT(query, count = 5) {
   return new Promise((resolve, reject) => {
-    const cmd = `yt-dlp "ytsearch${count}:${query} audio" --print "%(title)s|||%(duration_string)s|||%(webpage_url)s" --no-download --no-playlist`;
+    const cmd = `./yt-dlp "ytsearch${count}:${query} audio" --print "%(title)s|||%(duration_string)s|||%(webpage_url)s" --no-download --no-playlist`;
     exec(cmd, { timeout: 60000 }, (err, stdout) => {
       if (err) return resolve([]);
       const results = stdout
@@ -145,7 +145,7 @@ async function recognizeMusicFromFile(filePath) {
 // Video fayldan 30 soniyalik audio kesib olish (ffmpeg orqali)
 function extractAudioClip(videoPath, outPath, duration = 30) {
   return new Promise((resolve, reject) => {
-    const cmd = `ffmpeg -i "${videoPath}" -t ${duration} -vn -ar 22050 -ac 1 -b:a 64k "${outPath}" -y -loglevel error`;
+    const cmd = `./ffmpeg -i "${videoPath}" -t ${duration} -vn -ar 22050 -ac 1 -b:a 64k "${outPath}" -y -loglevel error`;
     exec(cmd, { timeout: 60000 }, (err) => {
       if (err) reject(err);
       else resolve(outPath);
@@ -157,13 +157,7 @@ function extractAudioClip(videoPath, outPath, duration = 30) {
 //  🎧 AUDIO YUKLOVCHI
 // ============================================================
 function downloadAudioMP3(url, outputTemplate) {
-  return new Promise((resolve, reject) => {
-    const cmd = `yt-dlp -o "${outputTemplate}" --extract-audio --audio-format mp3 --audio-quality 0 --no-playlist "${url}"`;
-    exec(cmd, { timeout: 120000 }, (err, stdout, stderr) => {
-      if (err) reject(new Error(stderr || err.message));
-      else resolve(stdout);
-    });
-  });
+  return ytDlpDownload(url, outputTemplate, '-x --audio-format mp3 --audio-quality 0');
 }
 
 // ============================================================
