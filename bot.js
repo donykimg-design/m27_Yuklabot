@@ -32,7 +32,7 @@ const pendingCleanup = new Map();
 //  🔗 URL ANIQLOVCHILAR
 // ============================================================
 const PATTERNS = {
-  instagram: /https?:\/\/(www\.)?instagram\.com\/(reel\/|p\/|stories\/|tv\/)[A-Za-z0-9_\-]+/i,
+  instagram: /https?:\/\/(www\.)?instagram\.com\/(reel|p|stories|tv)\/([A-Za-z0-9_\-]+)/i,
   youtube:   /https?:\/\/(www\.)?(youtube\.com\/(watch\?v=|shorts\/|embed\/)|youtu\.be\/)[A-Za-z0-9_\-]+/i,
 };
 
@@ -45,7 +45,11 @@ function detectPlatform(text) {
 function extractUrl(text) {
   const matchIG  = text.match(/https?:\/\/[^\s]+instagram\.com[^\s]*/i);
   const matchYT  = text.match(/https?:\/\/[^\s]*(youtube\.com|youtu\.be)[^\s]*/i);
-  return (matchIG || matchYT || [])[0] || null;
+  let url = (matchIG || matchYT || [])[0] || null;
+  if (url && url.includes('instagram.com')) {
+    url = url.split('?')[0]; // Trackerni tozalash
+  }
+  return url;
 }
 
 function createTmpDir(prefix = 'yuklaidi') {
@@ -72,10 +76,9 @@ function ytDlpDownload(url, outputTemplate, extraArgs = '') {
     const isAudio = extraArgs.includes('-x');
     const formatStr = isAudio 
       ? '-f "bestaudio/best"' 
-      : '-f "bestvideo[ext=mp4][filesize<45M]+bestaudio[ext=m4a]/best[ext=mp4][filesize<45M]/best"';
+      : '-f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"';
 
-    // Render uchun tizim yo'llari (yt-dlp va ffmpeg)
-    const cmd = `yt-dlp -o "${outputTemplate}" --no-playlist --max-filesize 49m --no-check-certificate --user-agent "${userAgent}" ${formatStr} ${extraArgs} "${url}"`;
+    const cmd = `yt-dlp -o "${outputTemplate}" --no-playlist --max-filesize 49m --no-check-certificate --user-agent "${userAgent}" --geo-bypass --no-warnings --force-overwrites --no-part ${formatStr} ${extraArgs} "${url}"`;
     
     exec(cmd, { timeout: 120000 }, (err, stdout, stderr) => {
       if (err) reject(new Error(stderr || err.message));
@@ -87,6 +90,23 @@ function ytDlpDownload(url, outputTemplate, extraArgs = '') {
 function getFirstFile(dir) {
   const files = fs.readdirSync(dir).filter(f => !f.startsWith('.'));
   return files.length > 0 ? path.join(dir, files[0]) : null;
+}
+
+function getVideoMetadata(url) {
+  return new Promise((resolve) => {
+    const cmd = `yt-dlp --dump-json --no-playlist --no-check-certificate "${url}"`;
+    exec(cmd, { timeout: 30000 }, (err, stdout) => {
+      if (err) return resolve(null);
+      try {
+        const data = JSON.parse(stdout);
+        return resolve({
+          title: data.title,
+          track: data.track || null,
+          artist: data.artist || data.creator || data.uploader || null
+        });
+      } catch (e) { resolve(null); }
+    });
+  });
 }
 
 function searchMusicYT(query, count = 5) {
@@ -124,6 +144,16 @@ function extractAudioClip(videoPath, outPath, duration = 30) {
   });
 }
 
+function extractFullAudio(videoPath, outPath) {
+    return new Promise((resolve, reject) => {
+      const cmd = `ffmpeg -i "${videoPath}" -vn -ab 128k -ar 44100 -y "${outPath}"`;
+      exec(cmd, { timeout: 120000 }, (err) => {
+        if (err) reject(err);
+        else resolve(outPath);
+      });
+    });
+  }
+
 function downloadAudioMP3(url, outputTemplate) {
   return ytDlpDownload(url, outputTemplate, '-x --audio-format mp3 --audio-quality 0');
 }
@@ -133,9 +163,10 @@ function downloadAudioMP3(url, outputTemplate) {
 // ============================================================
 function makeDownloadKeyboard(chatId) {
   return {
-    inline_keyboard: [[
-      { text: '🎵 Qo\'shiqni yuklab olish', callback_data: `music:find:${chatId}` }
-    ]]
+    inline_keyboard: [
+      [{ text: '🎵 Audiosini yuklash', callback_data: `music:extract:${chatId}` }],
+      [{ text: '🔍 Musiqasini yuklash', callback_data: `music:find:${chatId}` }]
+    ]
   };
 }
 
@@ -157,7 +188,6 @@ function makeMusicResultsKeyboard(chatId, results, recognized) {
 // ============================================================
 const TEXTS = {
   start: (name) => `👋 Salom, <b>${name}</b>!\nMen @m27_yuklabot — faqat link yuboring!`,
-  help: `📖 Instagram yoki YouTube linkini yuboring.`,
   unsupported: `❓ Noma'lum format!`,
 };
 
@@ -182,6 +212,9 @@ bot.on('message', async (msg) => {
     const mediaFile = getFirstFile(tmpDir);
     if (!mediaFile) throw new Error('Fayl topilmadi');
 
+    const metadata = await getVideoMetadata(url);
+    const trackInfo = metadata ? (metadata.track ? `${metadata.track} - ${metadata.artist}` : metadata.title) : null;
+
     const isVideo = !['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(path.extname(mediaFile).toLowerCase());
     const caption = `@m27_yuklabot✅`;
 
@@ -193,7 +226,7 @@ bot.on('message', async (msg) => {
       await bot.sendPhoto(chatId, mediaFile, { caption, parse_mode: 'HTML', reply_markup: makeDownloadKeyboard(chatId) });
     }
 
-    userStates.set(chatId.toString(), { videoPath: mediaFile, isVideo, tmpDir, url, platform });
+    userStates.set(chatId.toString(), { videoPath: mediaFile, isVideo, tmpDir, url, platform, trackInfo });
     cleanupDir(tmpDir, 600_000);
   } catch (err) {
     bot.editMessageText('❌ Xatolik!', { chat_id: chatId, message_id: loadMsg.message_id });
@@ -202,28 +235,40 @@ bot.on('message', async (msg) => {
 });
 
 bot.on('callback_query', async (query) => {
-  const chatId = query.message.chat.id;
+  const chatId = query.message.chat.id.toString();
   const data   = query.data;
 
+  if (data.startsWith('music:extract:')) {
+    await bot.answerCallbackQuery(query.id, { text: '🎵 Audiodini kesib olish...' });
+    const state = userStates.get(chatId);
+    if (!state) return bot.sendMessage(chatId, '❌ Eskirgan.');
+
+    const mp3Path = path.join(state.tmpDir, 'audio.mp3');
+    try {
+        await extractFullAudio(state.videoPath, mp3Path);
+        await bot.sendAudio(chatId, mp3Path, { caption: `@m27_yuklabot✅`, parse_mode: 'HTML' });
+    } catch (e) { bot.sendMessage(chatId, '❌ Xato!'); }
+  }
+
   if (data.startsWith('music:find:')) {
-    await bot.answerCallbackQuery(query.id, { text: '🎵 Qidirilmoqda...' });
-    const state = userStates.get(chatId.toString());
+    await bot.answerCallbackQuery(query.id, { text: '🔍 Qidirilmoqda...' });
+    const state = userStates.get(chatId);
     if (!state) return bot.sendMessage(chatId, '❌ Eskirgan.');
 
     const searchMsg = await bot.sendMessage(chatId, '🔍 Qidirilmoqda...');
     try {
       let recognized = null;
-      let searchQuery = 'trending music';
+      let searchQuery = state.trackInfo || 'trending music';
 
-      if (state.isVideo && AUDD_API_KEY !== 'test') {
+      if (state.isVideo && AUDD_API_KEY !== 'test' && !state.trackInfo) {
         const clipPath = path.join(state.tmpDir, 'clip.mp3');
         try {
           await extractAudioClip(state.videoPath, clipPath, 30);
           recognized = await recognizeMusicFromFile(clipPath);
+          if (recognized) searchQuery = `${recognized.artist} - ${recognized.title}`;
         } catch (e) {}
       }
 
-      if (recognized) searchQuery = `${recognized.artist} - ${recognized.title}`;
       const results = await searchMusicYT(searchQuery, 5);
       state.searchResults = results;
 
@@ -237,7 +282,7 @@ bot.on('callback_query', async (query) => {
     const parts = data.split(':');
     const index = parseInt(parts[3]);
     const dlType = parts[4];
-    const state = userStates.get(chatId.toString());
+    const state = userStates.get(chatId);
     const results = state?.searchResults;
     if (!results || !results[index]) return;
 
