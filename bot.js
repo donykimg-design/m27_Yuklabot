@@ -100,6 +100,29 @@ function getFirstFile(dir) {
 }
 
 // ============================================================
+//  📊 METADATA OLISH (yt-dlp)
+// ============================================================
+function getVideoMetadata(url) {
+  return new Promise((resolve) => {
+    const cmd = `yt-dlp --dump-json --no-playlist --no-check-certificate "${url}"`;
+    exec(cmd, { timeout: 30000 }, (err, stdout) => {
+      if (err) return resolve(null);
+      try {
+        const data = JSON.parse(stdout);
+        return resolve({
+          title: data.title,
+          track: data.track || null,
+          artist: data.artist || data.creator || data.uploader || null,
+          webpage_url: data.webpage_url
+        });
+      } catch (e) {
+        resolve(null);
+      }
+    });
+  });
+}
+
+// ============================================================
 //  🔍 MUSIQA QIDIRISH (YouTube ytsearch)
 // ============================================================
 function searchMusicYT(query, count = 5) {
@@ -273,10 +296,18 @@ bot.on('message', async (msg) => {
 
     if (!mediaFile) throw new Error('Fayl topilmadi');
 
+    // Metama'lumotlarni olish (musiqa nomini topish uchun)
+    const metadata = await getVideoMetadata(url);
+    const trackInfo = metadata ? (metadata.track ? `${metadata.track} - ${metadata.artist}` : metadata.title) : null;
+
     const ext  = path.extname(mediaFile).toLowerCase();
     const isVideo = !['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext);
     const fileSize = fs.statSync(mediaFile).size;
-    const caption  = `👆 <b>@m27_yuklabot</b>`;
+    
+    let caption = `👆 <b>@m27_yuklabot</b>`;
+    if (trackInfo) {
+        caption = `🎵 <b>Musiqa:</b> ${trackInfo}\n\n` + caption;
+    }
 
     await bot.deleteMessage(chatId, loadMsg.message_id);
 
@@ -305,6 +336,7 @@ bot.on('message', async (msg) => {
       platform,
       searchResults: null,
       recognized: null,
+      trackInfo: trackInfo // Saqlab qo'yamiz
     });
 
     cleanupDir(tmpDir, 600_000); // 10 daqiqadan keyin o'chirish
@@ -399,16 +431,23 @@ bot.on('callback_query', async (query) => {
         searchQuery = `${recognized.artist} - ${recognized.title}`;
         state.recognized = recognized;
         await bot.editMessageText(
-          `🎧 <b>${recognized.artist} — ${recognized.title}</b>\n\n🔍 O'xshash qo'shiqlar qidirilmoqda...`,
+          `🎧 <b>${recognized.artist} — ${recognized.title}</b>\n\n🔍 O'xshash qo'shiqlar qidirlmoqda...`,
           { chat_id: chatId, message_id: searchMsg.message_id, parse_mode: 'HTML' }
         );
+      } else if (state.trackInfo) {
+        // Metadata orqali topilgan musiqa nomi bilan qidirish
+        searchQuery = state.trackInfo;
+        await bot.editMessageText(
+            `🎵 <b>${searchQuery}</b> topildi. Tozalasini qidiryapman...`,
+            { chat_id: chatId, message_id: searchMsg.message_id, parse_mode: 'HTML' }
+          );
       } else {
-        // AudD yo'q esa — video sarlavhasidan qidirish
+        // AudD ham, Metadata ham yo'q bo'lsa
         searchQuery = state.platform === 'youtube'
           ? `site:${state.url}`
-          : 'trending music 2024 slowed reverb';
+          : 'trending music mix';
         await bot.editMessageText(
-          '🔍 Mashhur qo\'shiqlar qidirilmoqda...',
+          '🔍 Musiqa nomi topilmadi. O\'xshashlarini qidiryapman...',
           { chat_id: chatId, message_id: searchMsg.message_id }
         );
       }
