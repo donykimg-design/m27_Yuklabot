@@ -75,21 +75,22 @@ function cleanupDir(dir, delayMs = 300000) {
 //  ⬇️  VIDEO/RASM YUKLOVCHI (yt-dlp)
 // ============================================================
 function ytDlpDownload(url, outputTemplate, extraArgs = '') {
+  // Eng yangi Chrome User-Agent
   const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
   return new Promise((resolve, reject) => {
     const isAudio = extraArgs.includes('-x');
+    
+    // Instagram va YouTube uchun soddalashtirilgan format
     const formatStr = isAudio 
       ? '-f "bestaudio/best"' 
-      : '-f "bestvideo[ext=mp4][filesize<45M]+bestaudio[ext=m4a]/best[ext=mp4][filesize<45M]/best"';
+      : '-f "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"';
 
-    // Rasm va videolar uchun eng ishonchli flaglar
-    const cmd = `yt-dlp -o "${outputTemplate}" --no-playlist --max-filesize 49m --no-check-certificate --user-agent "${userAgent}" --geo-bypass --no-warnings ${formatStr} ${extraArgs} "${url}"`;
+    const cmd = `yt-dlp -o "${outputTemplate}" --no-playlist --max-filesize 49m --no-check-certificate --user-agent "${userAgent}" --geo-bypass --no-warnings --force-overwrites --no-part ${formatStr} ${extraArgs} "${url}"`;
     
-    console.log('[yt-dlp] Yuklash boshlandi:', url);
+    console.log('[yt-dlp] Yuklash urinishi:', url);
     exec(cmd, { timeout: 120000 }, (err, stdout, stderr) => {
       if (err) {
-        console.error('[yt-dlp] Xatolik (stderr):', stderr);
-        console.error('[yt-dlp] Xatolik (err):', err.message);
+        console.error('[yt-dlp] Xato tafsiloti:', stderr || err.message);
         reject(new Error(stderr || err.message));
       } else {
         resolve(stdout);
