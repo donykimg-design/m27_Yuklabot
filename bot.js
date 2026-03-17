@@ -256,8 +256,9 @@ bot.on('message', async (msg) => {
 
     const ext  = path.extname(mediaFile).toLowerCase();
     const isVideo = !['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(ext);
-    let caption = `👆 <b>@m27_yuklabot</b>`;
-    if (trackInfo) caption = `🎵 <b>Musiqa:</b> ${trackInfo}\n\n` + caption;
+    
+    // Foydalanuvchi talabiga ko'ra faqat shu yozuv qoldi
+    let caption = `@m27_yuklabot✅`;
 
     await bot.deleteMessage(chatId, loadMsg.message_id);
 
