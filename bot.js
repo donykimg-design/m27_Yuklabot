@@ -177,7 +177,7 @@ function makeMusicResultsKeyboard(chatId, results, recognized) {
   }));
   const rows = [
     recognized ? [{ text: '📄 Qo\'shiq so\'zlari', callback_data: `music:lyrics:${chatId}` }] : [],
-    [{ text: '🎬 Video (YouTube)', callback_data: `music:dl:${chatId}:0:video` }],
+    results.length > 0 ? [{ text: '🎬 Video (YouTube)', url: results[0].url }] : [],
     numButtons,
   ].filter(r => r.length > 0);
   return { inline_keyboard: rows };
