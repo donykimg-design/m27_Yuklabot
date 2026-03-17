@@ -164,8 +164,7 @@ function downloadAudioMP3(url, outputTemplate) {
 function makeDownloadKeyboard(chatId) {
   return {
     inline_keyboard: [
-      [{ text: '🎵 Audiosini yuklash', callback_data: `music:extract:${chatId}` }],
-      [{ text: '🔍 Musiqasini yuklash', callback_data: `music:find:${chatId}` }]
+      [{ text: '🎵 Audiosini yuklash', callback_data: `music:extract:${chatId}` }]
     ]
   };
 }
