@@ -32,7 +32,7 @@ const pendingCleanup = new Map(); // cleanup timers
 //  🔗 URL ANIQLOVCHILAR
 // ============================================================
 const PATTERNS = {
-  instagram: /https?:\/\/(www\.)?instagram\.com\/(reel\/|p\/|stories\/|tv\/)[A-Za-z0-9_\-]+/i,
+  instagram: /https?:\/\/(www\.)?instagram\.com\/(reel|p|stories|tv)\/([A-Za-z0-9_\-]+)/i,
   youtube:   /https?:\/\/(www\.)?(youtube\.com\/(watch\?v=|shorts\/|embed\/)|youtu\.be\/)[A-Za-z0-9_\-]+/i,
 };
 
@@ -80,7 +80,7 @@ function ytDlpDownload(url, outputTemplate, extraArgs = '') {
       ? '-f "bestaudio/best"' 
       : '-f "bestvideo[ext=mp4][filesize<45M]+bestaudio[ext=m4a]/best[ext=mp4][filesize<45M]/best"';
 
-    const cmd = `./yt-dlp -o "${outputTemplate}" --no-playlist --max-filesize 49m --no-check-certificate --user-agent "${userAgent}" --ffmpeg-location ./ffmpeg ${formatStr} ${extraArgs} "${url}"`;
+    const cmd = `yt-dlp -o "${outputTemplate}" --no-playlist --max-filesize 49m --no-check-certificate --user-agent "${userAgent}" ${formatStr} ${extraArgs} "${url}"`;
     
     console.log('[yt-dlp] CMD:', cmd);
     exec(cmd, { timeout: 120000 }, (err, stdout, stderr) => {
@@ -104,7 +104,7 @@ function getFirstFile(dir) {
 // ============================================================
 function searchMusicYT(query, count = 5) {
   return new Promise((resolve, reject) => {
-    const cmd = `./yt-dlp "ytsearch${count}:${query} audio" --print "%(title)s|||%(duration_string)s|||%(webpage_url)s" --no-download --no-playlist`;
+    const cmd = `yt-dlp "ytsearch${count}:${query} audio" --print "%(title)s|||%(duration_string)s|||%(webpage_url)s" --no-download --no-playlist`;
     exec(cmd, { timeout: 60000 }, (err, stdout) => {
       if (err) return resolve([]);
       const results = stdout
@@ -145,13 +145,24 @@ async function recognizeMusicFromFile(filePath) {
 // Video fayldan 30 soniyalik audio kesib olish (ffmpeg orqali)
 function extractAudioClip(videoPath, outPath, duration = 30) {
   return new Promise((resolve, reject) => {
-    const cmd = `./ffmpeg -i "${videoPath}" -t ${duration} -vn -ar 22050 -ac 1 -b:a 64k "${outPath}" -y -loglevel error`;
+    const cmd = `ffmpeg -i "${videoPath}" -t ${duration} -vn -ar 22050 -ac 1 -b:a 64k "${outPath}" -y -loglevel error`;
     exec(cmd, { timeout: 60000 }, (err) => {
       if (err) reject(err);
       else resolve(outPath);
     });
   });
 }
+
+// Butun videoni MP3 ga aylantirish
+function extractFullAudio(videoPath, outPath) {
+    return new Promise((resolve, reject) => {
+      const cmd = `ffmpeg -i "${videoPath}" -vn -ab 128k -ar 44100 -y "${outPath}"`;
+      exec(cmd, { timeout: 120000 }, (err) => {
+        if (err) reject(err);
+        else resolve(outPath);
+      });
+    });
+  }
 
 // ============================================================
 //  🎧 AUDIO YUKLOVCHI
@@ -165,9 +176,10 @@ function downloadAudioMP3(url, outputTemplate) {
 // ============================================================
 function makeDownloadKeyboard(chatId) {
   return {
-    inline_keyboard: [[
-      { text: '🎵 Qo\'shiqni yuklab olish', callback_data: `music:find:${chatId}` }
-    ]]
+    inline_keyboard: [
+      [{ text: '🎵 Musiqasini (MP3) yuklash', callback_data: `music:extract:${chatId}` }],
+      [{ text: '🔍 Musiqa tanib olish', callback_data: `music:find:${chatId}` }]
+    ]
   };
 }
 
@@ -323,7 +335,40 @@ bot.on('callback_query', async (query) => {
   const data   = query.data;
 
   // ───────────────────────────────────────────────
-  //  🎵 MUSIQA TOPISH
+  //  🎵 MUSIQA AJRATIB OLISH (ffmpeg orqali direkt)
+  // ───────────────────────────────────────────────
+  if (data.startsWith('music:extract:')) {
+    await bot.answerCallbackQuery(query.id, { text: '🎵 Musiqa tayyorlanmoqda...' });
+
+    const state = userStates.get(`${chatId}`);
+    if (!state || !state.videoPath) {
+      return bot.sendMessage(chatId, '❌ Fayl topilmadi yoki eskirgan. Linkni qayta yuboring.');
+    }
+
+    const loadMsg = await bot.sendMessage(chatId, '⏳ Videodan audio ajratib olinmoqda...');
+    const mp3Path = path.join(state.tmpDir, 'audio.mp3');
+
+    try {
+      await extractFullAudio(state.videoPath, mp3Path);
+      const stats = fs.statSync(mp3Path);
+      const sizeMB = (stats.size / 1024 / 1024).toFixed(1);
+
+      await bot.deleteMessage(chatId, loadMsg.message_id);
+      await bot.sendAudio(chatId, mp3Path, {
+        caption: `🎵 <b>Videodan olingan musiqa</b>\n📦 ${sizeMB} MB\n\n👆 @m27_yuklabot`,
+        parse_mode: 'HTML'
+      });
+    } catch (err) {
+      console.error('[Extract Error]', err);
+      await bot.editMessageText('❌ Musiqa ajratishda xatolik yuz berdi.', {
+        chat_id: chatId,
+        message_id: loadMsg.message_id
+      });
+    }
+  }
+
+  // ───────────────────────────────────────────────
+  //  🔍 MUSIQA TOPISH (AudD + Search)
   // ───────────────────────────────────────────────
   if (data.startsWith('music:find:')) {
     await bot.answerCallbackQuery(query.id, { text: '🎵 Musiqa qidirilmoqda...' });
