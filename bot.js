@@ -267,12 +267,12 @@ bot.on('message', async (msg) => {
       await bot.sendPhoto(chatId, mediaFile, { caption, parse_mode: 'HTML', reply_markup: makeDownloadKeyboard(chatId) });
     }
 
-    userStates.set(`${chatId}`, { videoPath: mediaFile, isVideo, tmpDir, url, platform, searchResults: null, recognized: null, trackInfo });
+    userStates.set(chatId.toString(), { videoPath: mediaFile, isVideo, tmpDir, url, platform, searchResults: null, recognized: null, trackInfo });
     cleanupDir(tmpDir, 600_000);
 
   } catch (err) {
     console.error('[Error]', err.message);
-    bot.sendMessage(chatId, '❌ Xatolik yuz berdi!');
+    bot.sendMessage(chatId, '❌ Yuklashda xatolik! Linkni tekshiring.');
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) {}
   }
 });
@@ -286,8 +286,8 @@ bot.on('callback_query', async (query) => {
 
   if (data.startsWith('music:extract:')) {
     await bot.answerCallbackQuery(query.id, { text: '🎵 Musiqa tayyorlanmoqda...' });
-    const state = userStates.get(`${chatId}`);
-    if (!state || !state.videoPath) return bot.sendMessage(chatId, '❌ Fayl topilmadi.');
+    const state = userStates.get(chatId.toString());
+    if (!state || !state.videoPath) return bot.sendMessage(chatId, '❌ Ma\'lumot topilmadi yoki eskirgan. Linkni qayta yuboring.');
 
     const mp3Path = path.join(state.tmpDir, 'audio.mp3');
     try {
@@ -301,8 +301,8 @@ bot.on('callback_query', async (query) => {
 
   if (data.startsWith('music:find:')) {
     await bot.answerCallbackQuery(query.id, { text: '🔍 Musiqa qidirilmoqda...' });
-    const state = userStates.get(`${chatId}`);
-    if (!state) return bot.sendMessage(chatId, '❌ Eskirgan.');
+    const state = userStates.get(chatId.toString());
+    if (!state) return bot.sendMessage(chatId, '❌ Ma\'lumot eskirgan. Linkni qayta yuboring.');
 
     const searchMsg = await bot.sendMessage(chatId, '🔍 Qidirilmoqda...');
     try {
@@ -343,9 +343,9 @@ bot.on('callback_query', async (query) => {
     const parts = data.split(':');
     const index = parseInt(parts[3]);
     const dlType = parts[4];
-    const state = userStates.get(`${chatId}`);
+    const state = userStates.get(chatId.toString());
     const results = state?.searchResults;
-    if (!results || !results[index]) return;
+    if (!results || !results[index]) return bot.answerCallbackQuery(query.id, { text: '❌ Natija eskirgan!' });
 
     await bot.answerCallbackQuery(query.id, { text: `⏳ Yuklanmoqda...` });
     const tmpDir = createTmpDir('music');
