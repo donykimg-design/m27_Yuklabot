@@ -45,7 +45,12 @@ function detectPlatform(text) {
 function extractUrl(text) {
   const matchIG  = text.match(/https?:\/\/[^\s]+instagram\.com[^\s]*/i);
   const matchYT  = text.match(/https?:\/\/[^\s]*(youtube\.com|youtu\.be)[^\s]*/i);
-  return (matchIG || matchYT || [])[0] || null;
+  let url = (matchIG || matchYT || [])[0] || null;
+  if (url && url.includes('instagram.com')) {
+    // Shaxsiy ma'lumotlar va trackerlarni olib tashlash
+    url = url.split('?')[0];
+  }
+  return url;
 }
 
 // ============================================================
@@ -77,12 +82,14 @@ function ytDlpDownload(url, outputTemplate, extraArgs = '') {
       ? '-f "bestaudio/best"' 
       : '-f "bestvideo[ext=mp4][filesize<45M]+bestaudio[ext=m4a]/best[ext=mp4][filesize<45M]/best"';
 
-    const cmd = `yt-dlp -o "${outputTemplate}" --no-playlist --max-filesize 49m --no-check-certificate --user-agent "${userAgent}" ${formatStr} ${extraArgs} "${url}"`;
+    // Rasm va videolar uchun eng ishonchli flaglar
+    const cmd = `yt-dlp -o "${outputTemplate}" --no-playlist --max-filesize 49m --no-check-certificate --user-agent "${userAgent}" --geo-bypass --no-warnings ${formatStr} ${extraArgs} "${url}"`;
     
-    console.log('[yt-dlp] CMD:', cmd);
+    console.log('[yt-dlp] Yuklash boshlandi:', url);
     exec(cmd, { timeout: 120000 }, (err, stdout, stderr) => {
       if (err) {
-        console.error('[yt-dlp] ERROR:', stderr);
+        console.error('[yt-dlp] Xatolik (stderr):', stderr);
+        console.error('[yt-dlp] Xatolik (err):', err.message);
         reject(new Error(stderr || err.message));
       } else {
         resolve(stdout);
