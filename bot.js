@@ -23,32 +23,6 @@ if (!TOKEN) {
 const bot = new TelegramBot(TOKEN, { polling: true });
 
 // ============================================================
-//  🚀 BOTNI UYG'OQ TUTISH (KEEP ALIVE)
-// ============================================================
-const RENDER_URL = `https://${process.env.RENDER_EXTERNAL_HOSTNAME || 'm27-yuklabot.onrender.com'}`; 
-
-setInterval(async () => {
-  try {
-    await axios.get(RENDER_URL);
-    console.log('✅ Bot uyg\'oq saqlanmoqda...');
-  } catch (e) {
-    console.log('⚠️ Ping yuborishda xato (Bot hali Live emas yoki manzil noto\'g\'ri).');
-  }
-}, 10 * 60 * 1000); // Har 10 daqiqada o'zini turtadi
-
-// ============================================================
-//  🛠 YT-DLP NI YANGILASH (INSTAGRAM BLOKI UCHUN)
-// ============================================================
-try {
-  console.log('⏳ yt-dlp yangilanmoqda...');
-  execSync('python3 -m pip install -U yt-dlp', { stdio: 'inherit' });
-  console.log('✅ yt-dlp yangilandi!');
-} catch (e) {
-  console.log('⚠️ yt-dlp yangilashda xatolik (lekin davom etamiz).');
-}
-
-
-// ============================================================
 //  📦 XOLAT SAQLASH
 // ============================================================
 const userStates = new Map();
@@ -254,7 +228,7 @@ bot.on('message', async (msg) => {
     userStates.set(chatId.toString(), { videoPath: mediaFile, isVideo, tmpDir, url, platform, trackInfo });
     cleanupDir(tmpDir, 600_000);
   } catch (err) {
-    bot.editMessageText(`❌ Xatolik!\n\nKod: <code>${err.message || 'Noma\'lum'}</code>`, { chat_id: chatId, message_id: loadMsg.message_id, parse_mode: 'HTML' });
+    bot.editMessageText('❌ Xatolik!', { chat_id: chatId, message_id: loadMsg.message_id });
     try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (_) {}
   }
 });
